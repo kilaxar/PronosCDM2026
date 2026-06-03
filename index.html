@@ -484,12 +484,12 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 // ══════════════════════════════════════════
 const CONFIG = {
   firebase: {
-    apiKey:            "AIzaSyAJeGQs4KX-gYqsueWXTmLUC5O-vctxqJo",
-    authDomain:        "pronoscdm2026.firebaseapp.com",
-    projectId:         "pronoscdm2026",
-    storageBucket:     "pronoscdm2026.firebasestorage.app",
-    messagingSenderId: "525764230537",
-    appId:             "1:525764230537:web:c22e9d7d927ef986fff558"
+    apiKey:            "VOTRE_API_KEY",
+    authDomain:        "VOTRE_PROJECT.firebaseapp.com",
+    projectId:         "VOTRE_PROJECT_ID",
+    storageBucket:     "VOTRE_PROJECT.appspot.com",
+    messagingSenderId: "VOTRE_SENDER_ID",
+    appId:             "VOTRE_APP_ID"
   },
   // Code secret pour créer un compte administrateur
   adminCode: "ADMIN2026"
@@ -631,7 +631,7 @@ function calcPoints(pred, match, scoring) {
 // Formatage en heure de Paris (CEST = UTC+2 en été, CET = UTC+1 en hiver)
 // On utilise timeZone:'Europe/Paris' — le navigateur fait la conversion proprement.
 const TZ = 'Europe/Paris';
- 
+
 function fmtTime(isoStr) {
   return new Date(isoStr).toLocaleTimeString('fr-FR', {
     hour: '2-digit', minute: '2-digit', timeZone: TZ
