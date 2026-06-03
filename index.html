@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#052e16">
+<title>⚽ Pronos CdM 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { sans:['Manrope','sans-serif'], mono:['DM Mono','monospace'] },
+    colors: {
+      pitch: { 950:'#010d06', 900:'#021a0d', 800:'#052e16', 700:'#0d4a24', 600:'#166534', 500:'#16a34a', 400:'#4ade80', 300:'#86efac' },
+      gold: { 500:'#f59e0b', 400:'#fbbf24', 300:'#fcd34d' }
+    }
+  }}
+}
+</script>
+<style>
+[v-cloak]{display:none}
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+body{font-family:'Manrope',sans-serif;background:#0a1a10;overscroll-behavior:none;-webkit-font-smoothing:antialiased}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.card{background:#fff;border-radius:16px;overflow:hidden}
+.slide-in{animation:slideIn .25s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.pulse{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.tab-bar{background:#fff;border-top:1px solid #e5e7eb;padding-bottom:env(safe-area-inset-bottom)}
+.score-box{width:52px;height:52px;font-size:1.5rem;font-weight:800;text-align:center;border:2px solid #d1fae5;border-radius:12px;background:#f0fdf4;color:#052e16;font-family:'DM Mono',monospace;transition:border-color .2s}
+.score-box:focus{outline:none;border-color:#16a34a;background:#dcfce7}
+.score-box.filled{border-color:#16a34a;background:#f0fdf4}
+.result-btn{flex:1;padding:10px 4px;border-radius:12px;border:2px solid #e5e7eb;background:#f9fafb;font-size:.75rem;font-weight:700;text-align:center;cursor:pointer;transition:all .15s;line-height:1.3}
+.result-btn.active{border-color:#16a34a;background:#f0fdf4;color:#052e16}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.65rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#052e16;color:#fff;padding:10px 20px;border-radius:999px;font-size:.8rem;font-weight:600;z-index:999;animation:toastIn .3s ease}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="app" v-cloak>
+
+<!-- ═══════════ LOADING ═══════════ -->
+<div v-if="page==='loading'" class="min-h-screen flex flex-col items-center justify-center gap-4">
+  <div class="text-6xl" style="animation:spin 2s linear infinite">⚽</div>
+  <p class="text-green-400 text-sm font-semibold tracking-widest uppercase">Chargement...</p>
+</div>
+
+<!-- ═══════════ AUTH PAGE ═══════════ -->
+<div v-else-if="page==='auth'" class="min-h-screen flex flex-col" style="background:linear-gradient(160deg,#052e16 0%,#0a1a10 60%,#021a0d 100%)">
+  <div class="flex-1 flex flex-col items-center justify-center p-5">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="text-7xl mb-3">⚽</div>
+      <h1 class="text-4xl font-black text-white tracking-tight">PRONOS</h1>
+      <p class="text-green-300 text-sm font-semibold mt-1 tracking-widest">COUPE DU MONDE 2026</p>
+    </div>
+    <!-- Card -->
+    <div class="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl">
+      <!-- Tabs -->
+      <div class="flex border-b border-gray-100 mb-5">
+        <button @click="authTab='login'" :class="authTab==='login'?'text-pitch-800 border-pitch-600':'text-gray-300 border-transparent'" class="flex-1 pb-3 text-sm font-bold border-b-2 transition-colors">Connexion</button>
+        <button @click="authTab='register'" :class="authTab==='register'?'text-pitch-800 border-pitch-600':'text-gray-300 border-transparent'" class="flex-1 pb-3 text-sm font-bold border-b-2 transition-colors">Inscription</button>
+      </div>
+      <!-- Login -->
+      <div v-if="authTab==='login'" class="space-y-3">
+        <input v-model="f.email" type="email" placeholder="Email" autocomplete="email" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-500 bg-gray-50">
+        <input v-model="f.pw" type="password" placeholder="Mot de passe" @keyup.enter="doLogin" autocomplete="current-password" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-500 bg-gray-50">
+        <button @click="doLogin" :disabled="authBusy" class="w-full py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-50" style="background:#166534">
+          {{ authBusy?'Connexion…':'Se connecter' }}
+        </button>
+      </div>
+      <!-- Register -->
+      <div v-if="authTab==='register'" class="space-y-3">
+        <input v-model="f.name" type="text" placeholder="Pseudo (ex: LeRoi77)" autocomplete="nickname" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-500 bg-gray-50">
+        <input v-model="f.email" type="email" placeholder="Email" autocomplete="email" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-500 bg-gray-50">
+        <input v-model="f.pw" type="password" placeholder="Mot de passe (min. 6 car.)" autocomplete="new-password" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-500 bg-gray-50">
+        <input v-model="f.adminCode" type="text" placeholder="Code admin (optionnel)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-500 bg-gray-50">
+        <p class="text-xs text-gray-400">Le code admin te donne accès à la gestion du tournoi.</p>
+        <button @click="doRegister" :disabled="authBusy" class="w-full py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-50" style="background:#166534">
+          {{ authBusy?"Inscription…":"S'inscrire" }}
+        </button>
+      </div>
+      <p v-if="authErr" class="mt-3 text-red-500 text-xs text-center font-medium">{{ authErr }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MAIN APP ═══════════ -->
+<div v-else class="min-h-screen flex flex-col pb-16">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 flex items-center justify-between px-4 py-3" style="background:linear-gradient(135deg,#052e16,#166534)">
+    <div class="flex items-center gap-2">
+      <span class="text-xl">⚽</span>
+      <div>
+        <h1 class="text-white font-black text-sm leading-none tracking-tight">CdM 2026</h1>
+        <p class="text-green-200 text-xs mt-0.5 font-semibold">{{ pageTitle }}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="text-right">
+        <p class="text-white text-xs font-bold leading-none">{{ userData?.username }}</p>
+        <p class="text-green-200 text-xs mt-0.5">{{ myTotalPts }} pts</p>
+      </div>
+      <button @click="doLogout" class="ml-1 bg-white/15 hover:bg-white/25 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors">Déco</button>
+    </div>
+  </header>
+
+  <!-- ── MATCHS PAGE ── -->
+  <div v-if="page==='matches'" class="flex-1 slide-in">
+    <!-- Phase tabs -->
+    <div class="bg-pitch-900 overflow-x-auto">
+      <div class="flex gap-1 p-2 min-w-max">
+        <button v-for="ph in availablePhases" :key="ph" @click="selPhase=ph;selGroup=''" :class="selPhase===ph?'bg-pitch-500 text-white':'text-green-300 bg-white/5'" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors">{{ ph }}</button>
+      </div>
+    </div>
+    <!-- Group tabs (only for Groupes) -->
+    <div v-if="selPhase==='Groupes'" class="bg-pitch-900 overflow-x-auto border-t border-white/5">
+      <div class="flex gap-1 p-2 min-w-max">
+        <button @click="selGroup=''" :class="!selGroup?'bg-white/20 text-white':'text-green-400 bg-white/5'" class="px-2.5 py-1 rounded-full text-xs font-bold">Tous</button>
+        <button v-for="g in 'ABCDEFGHIJKL'.split('')" :key="g" @click="selGroup=g" :class="selGroup===g?'bg-white/20 text-white':'text-green-400 bg-white/5'" class="px-2.5 py-1 rounded-full text-xs font-bold">{{ g }}</button>
+      </div>
+    </div>
+
+    <!-- Match list -->
+    <div class="p-3 space-y-2">
+      <template v-for="(grp, dateKey) in groupedMatches" :key="dateKey">
+        <p class="text-green-400 text-xs font-bold uppercase tracking-widest pt-2 px-1">{{ fmtDateHeader(dateKey) }}</p>
+
+        <div v-for="m in grp" :key="m.id" class="card shadow-sm">
+          <!-- Match row (always visible) -->
+          <div @click="toggleExpand(m.id)" class="px-4 pt-3 pb-2 select-none cursor-pointer">
+            <div class="flex justify-between items-center mb-2">
+              <span class="pill" :class="statusPillClass(m)">{{ statusPillLabel(m) }}</span>
+              <span class="text-gray-400 text-xs font-mono">{{ fmtKickoff(m.kickoffUTC) }} CEST</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <!-- Home -->
+              <div class="flex-1 flex items-center gap-1.5 justify-end">
+                <span class="text-sm font-bold text-gray-800 text-right leading-tight">{{ m.h }}</span>
+                <span class="text-2xl leading-none">{{ m.hf }}</span>
+              </div>
+              <!-- Score / VS -->
+              <div class="flex flex-col items-center min-w-[56px]">
+                <div v-if="m.status==='finished'" class="font-mono font-black text-xl text-pitch-800">{{ m.hs }}<span class="text-gray-300 mx-0.5">-</span>{{ m.as }}</div>
+                <div v-else-if="m.status==='live'" class="font-bold text-xs text-red-500 pulse">● LIVE</div>
+                <div v-else class="text-gray-300 font-bold text-lg">vs</div>
+                <!-- Points badge -->
+                <span v-if="m.status==='finished' && myPred(m.id)" class="mt-0.5 text-xs font-bold" :class="myPred(m.id).pts>0?'text-amber-500':'text-gray-300'">
+                  {{ myPred(m.id).pts>0?'+'+myPred(m.id).pts+' pt':'-' }}
+                </span>
+              </div>
+              <!-- Away -->
+              <div class="flex-1 flex items-center gap-1.5">
+                <span class="text-2xl leading-none">{{ m.af }}</span>
+                <span class="text-sm font-bold text-gray-800 leading-tight">{{ m.a }}</span>
+              </div>
+            </div>
+            <div class="flex justify-between items-center mt-1.5">
+              <span class="text-gray-300 text-xs">{{ m.venue }}</span>
+              <span v-if="myPred(m.id) && m.status==='upcoming'" class="text-green-600 text-xs font-bold">✓ Prono enregistré</span>
+              <span v-else-if="!myPred(m.id) && !isLocked(m)" class="text-amber-500 text-xs font-semibold">● À pronostiquer</span>
+            </div>
+          </div>
+
+          <!-- Expanded panel -->
+          <div v-if="expandedId===m.id" class="border-t border-gray-100 bg-gray-50 px-4 py-3 slide-in">
+
+            <!-- FINISHED: show prediction recap -->
+            <div v-if="m.status==='finished'">
+              <div v-if="myPred(m.id)" class="space-y-1.5">
+                <p class="text-xs font-bold text-gray-500 mb-2">🎯 Ton pronostic</p>
+                <div class="flex justify-between text-sm">
+                  <span class="text-gray-500">Résultat prédit</span>
+                  <span class="font-bold">{{ resLabel(myPred(m.id).res, m) }}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                  <span class="text-gray-500">Score prédit</span>
+                  <span class="font-mono font-bold">{{ myPred(m.id).hs }} - {{ myPred(m.id).as }}</span>
+                </div>
+                <div class="flex justify-between text-sm pt-2 border-t border-gray-200 font-black mt-2">
+                  <span>Points obtenus</span>
+                  <span :class="myPred(m.id).pts>0?'text-amber-500':'text-gray-400'">{{ myPred(m.id).pts }} pts</span>
+                </div>
+              </div>
+              <p v-else class="text-sm text-gray-400 text-center py-2">Pas de pronostic soumis.</p>
+              <button @click="openDetail(m)" class="w-full mt-3 py-2 text-xs font-bold text-pitch-700 border border-pitch-200 rounded-xl">Voir les pronos de tous les joueurs →</button>
+            </div>
+
+            <!-- LOCKED upcoming -->
+            <div v-else-if="isLocked(m)">
+              <p class="text-xs font-bold text-gray-500 mb-2">🔒 Match en cours / Pronos fermés</p>
+              <div v-if="myPred(m.id)" class="space-y-1.5">
+                <div class="flex justify-between text-sm"><span class="text-gray-500">Résultat prédit</span><span class="font-bold">{{ resLabel(myPred(m.id).res, m) }}</span></div>
+                <div class="flex justify-between text-sm"><span class="text-gray-500">Score prédit</span><span class="font-mono font-bold">{{ myPred(m.id).hs }} - {{ myPred(m.id).as }}</span></div>
+              </div>
+              <p v-else class="text-sm text-gray-400 text-center py-1">Aucun pronostic soumis pour ce match.</p>
+              <button @click="openDetail(m)" class="w-full mt-3 py-2 text-xs font-bold text-pitch-700 border border-pitch-200 rounded-xl">Voir les pronos des autres joueurs →</button>
+            </div>
+
+            <!-- OPEN: prediction form -->
+            <div v-else>
+              <!-- Result (independent) -->
+              <p class="text-xs font-bold text-gray-600 mb-2">① Résultat (indépendant du score)</p>
+              <div class="flex gap-2 mb-4">
+                <button @click="setRes(m.id,'home')" class="result-btn" :class="draftRes(m.id)==='home'?'active':''">
+                  <span class="text-xl">{{ m.hf }}</span><br>{{ shortName(m.h) }}
+                </button>
+                <button @click="setRes(m.id,'draw')" class="result-btn" :class="draftRes(m.id)==='draw'?'active':''">
+                  <span class="text-xl">🤝</span><br>Nul
+                </button>
+                <button @click="setRes(m.id,'away')" class="result-btn" :class="draftRes(m.id)==='away'?'active':''">
+                  <span class="text-xl">{{ m.af }}</span><br>{{ shortName(m.a) }}
+                </button>
+              </div>
+              <!-- Score (independent) -->
+              <p class="text-xs font-bold text-gray-600 mb-2">② Score exact (indépendant du résultat)</p>
+              <div class="flex items-center justify-center gap-4 mb-4">
+                <div class="text-center">
+                  <div class="text-xl mb-1">{{ m.hf }}</div>
+                  <input :value="draftHs(m.id)" @input="setHs(m.id,$event.target.value)" type="number" min="0" max="20" class="score-box" :class="draftHs(m.id)!==null&&draftHs(m.id)!==''?'filled':''">
+                </div>
+                <div class="text-gray-300 font-black text-3xl">—</div>
+                <div class="text-center">
+                  <div class="text-xl mb-1">{{ m.af }}</div>
+                  <input :value="draftAs(m.id)" @input="setAs(m.id,$event.target.value)" type="number" min="0" max="20" class="score-box" :class="draftAs(m.id)!==null&&draftAs(m.id)!==''?'filled':''">
+                </div>
+              </div>
+              <button @click="savePred(m.id)" :disabled="!canSave(m.id) || saving" class="w-full py-3.5 rounded-xl text-sm font-black text-white disabled:opacity-40 transition-opacity" style="background:#166534">
+                {{ myPred(m.id)?'💾 Modifier mon pronostic':'✅ Valider mon pronostic' }}
+              </button>
+              <button @click="openDetail(m)" class="w-full mt-2 py-2 text-xs font-semibold text-pitch-600">Voir les pronos des autres →</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="Object.keys(groupedMatches).length===0" class="text-center py-16">
+        <div class="text-5xl mb-3">🏟️</div>
+        <p class="text-green-400 text-sm">Aucun match dans cette catégorie</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CLASSEMENT PAGE ── -->
+  <div v-else-if="page==='leaderboard'" class="flex-1 p-3 space-y-3 slide-in">
+    <div class="card shadow-sm overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="font-black text-pitch-800">🏆 Classement général</h2>
+        <span class="text-xs text-gray-400">{{ leaderboard.length }} joueurs</span>
+      </div>
+      <div v-if="!leaderboard.length" class="py-12 text-center text-gray-300">
+        <div class="text-5xl mb-3">🏆</div>
+        <p class="text-sm">Le classement s'affichera après les premiers matchs</p>
+      </div>
+      <div v-else class="divide-y divide-gray-50">
+        <div v-for="(u,i) in leaderboard" :key="u.uid" class="flex items-center px-4 py-3" :class="u.uid===user?.uid?'bg-green-50':''">
+          <div class="w-8 text-center text-lg font-black" :class="i===0?'text-amber-400':i===1?'text-gray-400':i===2?'text-amber-700':'text-gray-300'">
+            {{ i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1 }}
+          </div>
+          <div class="flex-1 ml-3">
+            <p class="font-bold text-sm text-gray-800">{{ u.username }}<span v-if="u.uid===user?.uid" class="ml-1 text-xs text-pitch-600">(toi)</span></p>
+            <p class="text-xs text-gray-400">{{ u.count||0 }} pronos · {{ u.exact||0 }} scores exacts</p>
+          </div>
+          <div class="text-right">
+            <p class="font-black text-xl text-pitch-700">{{ u.pts }}</p>
+            <p class="text-xs text-gray-400">pts</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scoring info -->
+    <div class="card shadow-sm">
+      <div class="px-4 py-3 border-b border-gray-100">
+        <h2 class="font-black text-pitch-800 text-sm">📊 Barème des points</h2>
+      </div>
+      <div class="divide-y divide-gray-50">
+        <div v-for="(ps,ph) in scoring.phases" :key="ph" class="px-4 py-3">
+          <p class="font-bold text-sm text-gray-700">{{ ph }}</p>
+          <div class="flex gap-3 mt-1 flex-wrap">
+            <span class="text-xs text-gray-500">🎯 Score exact : <b class="text-pitch-700">{{ ps.exact }} pts</b></span>
+            <span class="text-xs text-gray-500">⚽ Score partiel : <b class="text-pitch-700">{{ ps.partial }} pts</b></span>
+            <span class="text-xs text-gray-500">✅ Résultat : <b class="text-pitch-700">{{ ps.result }} pts</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DETAIL MATCH PAGE ── -->
+  <div v-else-if="page==='detail' && detailMatch" class="flex-1 p-3 slide-in">
+    <button @click="page='matches'" class="flex items-center gap-1 text-green-400 text-sm font-bold mb-3">← Retour</button>
+    <!-- Match header -->
+    <div class="card shadow-sm p-4 mb-3">
+      <p class="text-xs text-gray-400 text-center mb-3 font-semibold uppercase tracking-wide">{{ detailMatch.phase }}{{ detailMatch.group?' · Groupe '+detailMatch.group:'' }}</p>
+      <div class="flex items-center justify-between">
+        <div class="text-center flex-1">
+          <div class="text-4xl">{{ detailMatch.hf }}</div>
+          <p class="font-bold text-sm mt-1 text-gray-800">{{ detailMatch.h }}</p>
+        </div>
+        <div class="text-center px-4">
+          <div v-if="detailMatch.status==='finished'" class="font-mono font-black text-3xl text-pitch-800">{{ detailMatch.hs }}<span class="text-gray-300 mx-1">-</span>{{ detailMatch.as }}</div>
+          <div v-else class="text-xl font-black text-gray-300">vs</div>
+          <p class="text-xs text-gray-400 mt-1">{{ fmtKickoff(detailMatch.kickoffUTC) }} CEST</p>
+        </div>
+        <div class="text-center flex-1">
+          <div class="text-4xl">{{ detailMatch.af }}</div>
+          <p class="font-bold text-sm mt-1 text-gray-800">{{ detailMatch.a }}</p>
+        </div>
+      </div>
+    </div>
+    <!-- All predictions -->
+    <div class="card shadow-sm">
+      <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+        <h2 class="font-black text-pitch-800 text-sm">Pronos des joueurs</h2>
+        <span class="text-xs text-gray-400">{{ detailPreds.length }} pronostics</span>
+      </div>
+      <div v-if="loadingDetail" class="py-8 text-center text-gray-400 text-sm">Chargement…</div>
+      <div v-else class="divide-y divide-gray-50">
+        <div v-for="p in detailPreds" :key="p.uid" class="px-4 py-3 flex items-center" :class="p.uid===user?.uid?'bg-green-50':''">
+          <div class="flex-1">
+            <p class="font-bold text-sm text-gray-800">{{ p.username }}<span v-if="p.uid===user?.uid" class="ml-1 text-xs text-pitch-600">(toi)</span></p>
+            <p class="text-xs text-gray-400 mt-0.5">Résultat : <b>{{ resLabel(p.res,detailMatch) }}</b> · Score : <b class="font-mono">{{ p.hs }}-{{ p.as }}</b></p>
+          </div>
+          <div v-if="detailMatch.status==='finished'" class="font-black text-lg" :class="p.pts>0?'text-amber-500':'text-gray-300'">{{ p.pts>0?'+'+p.pts:'0' }}</div>
+          <div v-else class="text-xs text-gray-300">–</div>
+        </div>
+        <div v-if="!detailPreds.length" class="py-8 text-center text-gray-300 text-sm">Aucun pronostic soumis</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ADMIN PAGE ── -->
+  <div v-else-if="page==='admin'" class="flex-1 slide-in">
+    <div v-if="!userData?.isAdmin" class="p-8 text-center text-gray-400">
+      <div class="text-5xl mb-3">🔐</div>
+      <p>Accès réservé aux administrateurs</p>
+    </div>
+    <div v-else>
+      <!-- Admin tabs -->
+      <div class="bg-white border-b border-gray-100 flex">
+        <button v-for="t in adminTabs" :key="t.key" @click="adminTab=t.key" :class="adminTab===t.key?'text-pitch-800 border-pitch-600':'text-gray-400 border-transparent'" class="flex-1 py-3 text-xs font-bold border-b-2 transition-colors">{{ t.label }}</button>
+      </div>
+
+      <!-- Tab: Matchs -->
+      <div v-if="adminTab==='matchs'" class="p-3 space-y-3">
+        <!-- Seed -->
+        <div class="card p-4 shadow-sm">
+          <h3 class="font-black text-sm text-pitch-800 mb-1">🚀 Initialisation</h3>
+          <p class="text-xs text-gray-400 mb-3">Charge les 72 matchs de phase de groupes dans Firestore. À faire une seule fois.</p>
+          <button @click="seedMatches" :disabled="adminBusy" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-50" style="background:#166534">{{ adminBusy?'Initialisation…':'⬆️ Initialiser les matchs de groupe' }}</button>
+        </div>
+        <!-- Add knockout match -->
+        <div class="card p-4 shadow-sm">
+          <h3 class="font-black text-sm text-pitch-800 mb-3">➕ Ajouter un match éliminatoire</h3>
+          <div class="space-y-2">
+            <select v-model="newM.phase" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pitch-500">
+              <option value="">Phase…</option>
+              <option v-for="ph in ['Huitièmes','Quarts','Demi-finales','3ème Place','Finale']" :key="ph">{{ ph }}</option>
+            </select>
+            <div class="flex gap-2">
+              <input v-model="newM.hf" placeholder="🏳️" class="w-14 border border-gray-200 rounded-xl px-2 py-2.5 text-xl text-center bg-gray-50 focus:outline-none">
+              <input v-model="newM.h" placeholder="Équipe domicile" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none">
+            </div>
+            <div class="flex gap-2">
+              <input v-model="newM.af" placeholder="🏳️" class="w-14 border border-gray-200 rounded-xl px-2 py-2.5 text-xl text-center bg-gray-50 focus:outline-none">
+              <input v-model="newM.a" placeholder="Équipe extérieur" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none">
+            </div>
+            <input v-model="newM.venue" placeholder="Ville / Stade" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none">
+            <div class="flex gap-2">
+              <div class="flex-1">
+                <label class="text-xs text-gray-500 font-semibold mb-1 block">Date (heure locale CEST)</label>
+                <input v-model="newM.dateLocal" type="datetime-local" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none">
+              </div>
+            </div>
+            <button @click="addMatch" :disabled="adminBusy||!newM.phase||!newM.h||!newM.a" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#166534">Ajouter le match</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Points -->
+      <div v-if="adminTab==='points'" class="p-3 space-y-3">
+        <div class="card p-4 shadow-sm">
+          <h3 class="font-black text-sm text-pitch-800 mb-3">⚙️ Barème des points par phase</h3>
+          <p class="text-xs text-gray-400 mb-4">Score exact = 2 buts corrects. Score partiel = 1 seul but correct. Résultat = victoire/nul correctement prédit (indépendamment du score).</p>
+          <div v-for="(ps,ph) in scoring.phases" :key="ph" class="mb-4 pb-4 border-b border-gray-100 last:border-0 last:mb-0 last:pb-0">
+            <p class="font-bold text-sm text-gray-700 mb-2">{{ ph }}</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="text-xs text-gray-400 font-semibold">Score exact</label>
+                <input :value="ps.exact" @input="ps.exact=+$event.target.value" type="number" min="0" class="w-full mt-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-pitch-500">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 font-semibold">Partiel</label>
+                <input :value="ps.partial" @input="ps.partial=+$event.target.value" type="number" min="0" class="w-full mt-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-pitch-500">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 font-semibold">Résultat</label>
+                <input :value="ps.result" @input="ps.result=+$event.target.value" type="number" min="0" class="w-full mt-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-pitch-500">
+              </div>
+            </div>
+          </div>
+          <button @click="saveScoring" :disabled="adminBusy" class="w-full mt-2 py-3 rounded-xl text-sm font-black text-white disabled:opacity-50" style="background:#166534">💾 Sauvegarder le barème</button>
+        </div>
+      </div>
+
+      <!-- Tab: Résultats -->
+      <div v-if="adminTab==='resultats'" class="p-3 space-y-3">
+        <!-- API fetch -->
+        <div class="card p-4 shadow-sm">
+          <h3 class="font-black text-sm text-pitch-800 mb-1">🌐 Récupérer les résultats automatiquement</h3>
+          <p class="text-xs text-gray-400 mb-3">Utilise l'API <b>football-data.org</b> (gratuit). Crée un compte sur <a href="https://www.football-data.org" target="_blank" class="text-pitch-600 underline">football-data.org</a> pour obtenir ton token.</p>
+          <input v-model="fdToken" type="text" placeholder="Token API football-data.org" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pitch-500 mb-2">
+          <button @click="fetchAPIResults" :disabled="adminBusy||!fdToken" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#0d4a24">🔄 Récupérer les résultats via API</button>
+          <p v-if="apiMsg" class="mt-2 text-xs text-center font-medium" :class="apiMsg.ok?'text-green-600':'text-red-500'">{{ apiMsg.text }}</p>
+        </div>
+
+        <!-- Manual result entry -->
+        <div class="card p-4 shadow-sm">
+          <h3 class="font-black text-sm text-pitch-800 mb-3">✏️ Saisie manuelle d'un résultat</h3>
+          <div class="space-y-2">
+            <select v-model="resultEntry.matchId" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pitch-500">
+              <option value="">Sélectionner un match…</option>
+              <option v-for="m in sortedMatches" :key="m.id" :value="m.id">{{ m.h }} vs {{ m.a }} ({{ fmtKickoff(m.kickoffUTC) }})</option>
+            </select>
+            <div class="flex gap-3 items-center justify-center py-2">
+              <div class="text-center">
+                <label class="text-xs text-gray-400 font-semibold">Domicile</label>
+                <input v-model.number="resultEntry.hs" type="number" min="0" max="99" class="score-box mt-1">
+              </div>
+              <div class="text-2xl font-black text-gray-300 mt-4">—</div>
+              <div class="text-center">
+                <label class="text-xs text-gray-400 font-semibold">Extérieur</label>
+                <input v-model.number="resultEntry.as" type="number" min="0" max="99" class="score-box mt-1">
+              </div>
+            </div>
+            <button @click="applyResult" :disabled="adminBusy||!resultEntry.matchId||resultEntry.hs===null||resultEntry.as===null" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#166534">💾 Enregistrer le résultat</button>
+          </div>
+        </div>
+
+        <!-- Recalculate all -->
+        <div class="card p-4 shadow-sm">
+          <h3 class="font-black text-sm text-pitch-800 mb-1">🔁 Recalculer tous les points</h3>
+          <p class="text-xs text-gray-400 mb-3">Recalcule les points de tous les joueurs pour tous les matchs terminés, selon le barème actuel.</p>
+          <button @click="recalcAll" :disabled="adminBusy" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-50" style="background:#7c3aed">🔁 Recalculer les points</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BOTTOM NAV ── -->
+  <nav class="tab-bar fixed bottom-0 left-0 right-0 z-40 flex">
+    <button v-for="tab in navTabs" :key="tab.key" @click="goPage(tab.key)" class="flex-1 flex flex-col items-center py-2.5 transition-colors" :class="page===tab.key?'text-pitch-700':'text-gray-400'">
+      <span class="text-xl leading-none">{{ tab.icon }}</span>
+      <span class="text-xs font-bold mt-0.5">{{ tab.label }}</span>
+    </button>
+  </nav>
+</div>
+
+<!-- Toast -->
+<div v-if="toast" class="toast">{{ toast }}</div>
+
+</div><!-- end #app -->
+
+<script>
+// ══════════════════════════════════════════
+//  ⚙️  CONFIGURATION — À MODIFIER
+// ══════════════════════════════════════════
+const CONFIG = {
+  firebase: {
+    apiKey:            "AIzaSyAJeGQs4KX-gYqsueWXTmLUC5O-vctxqJo",
+    authDomain:        "pronoscdm2026.firebaseapp.com",
+    projectId:         "pronoscdm2026",
+    storageBucket:     "pronoscdm2026.firebasestorage.app",
+    messagingSenderId: "525764230537",
+    appId:             "1:525764230537:web:c22e9d7d927ef986fff558"
+  },
+  // Code secret pour créer un compte administrateur
+  adminCode: "ADMIN2026"
+};
+
+// ══════════════════════════════════════════
+//  ⚽  DONNÉES — 72 MATCHS DE POULES
+//  ko = kickoffUTC (ISO), hs/as = scores (null = pas encore joué)
+// ══════════════════════════════════════════
+const MATCHES_SEED = [
+  // GROUPE A — Mexique · Afrique du Sud · Corée du Sud · Tchéquie
+  {id:'g001',n:1,phase:'Groupes',group:'A',h:'Mexique',a:'Afrique du Sud',hf:'🇲🇽',af:'🇿🇦',venue:'Mexico City',kickoffUTC:'2026-06-11T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g002',n:2,phase:'Groupes',group:'A',h:'Corée du Sud',a:'Tchéquie',hf:'🇰🇷',af:'🇨🇿',venue:'Guadalajara',kickoffUTC:'2026-06-12T02:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g003',n:3,phase:'Groupes',group:'A',h:'Tchéquie',a:'Afrique du Sud',hf:'🇨🇿',af:'🇿🇦',venue:'Atlanta',kickoffUTC:'2026-06-18T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g004',n:4,phase:'Groupes',group:'A',h:'Mexique',a:'Corée du Sud',hf:'🇲🇽',af:'🇰🇷',venue:'Guadalajara',kickoffUTC:'2026-06-19T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g005',n:5,phase:'Groupes',group:'A',h:'Afrique du Sud',a:'Corée du Sud',hf:'🇿🇦',af:'🇰🇷',venue:'Monterrey',kickoffUTC:'2026-06-24T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g006',n:6,phase:'Groupes',group:'A',h:'Tchéquie',a:'Mexique',hf:'🇨🇿',af:'🇲🇽',venue:'Mexico City',kickoffUTC:'2026-06-24T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE B — Canada · Suisse · Qatar · Bosnie-Herzégovine
+  {id:'g007',n:7,phase:'Groupes',group:'B',h:'Canada',a:'Bosnie-Herzégovine',hf:'🇨🇦',af:'🇧🇦',venue:'Toronto',kickoffUTC:'2026-06-12T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g008',n:8,phase:'Groupes',group:'B',h:'Qatar',a:'Suisse',hf:'🇶🇦',af:'🇨🇭',venue:'San Francisco',kickoffUTC:'2026-06-14T04:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g009',n:9,phase:'Groupes',group:'B',h:'Suisse',a:'Bosnie-Herzégovine',hf:'🇨🇭',af:'🇧🇦',venue:'Los Angeles',kickoffUTC:'2026-06-18T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g010',n:10,phase:'Groupes',group:'B',h:'Canada',a:'Qatar',hf:'🇨🇦',af:'🇶🇦',venue:'Vancouver',kickoffUTC:'2026-06-18T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g011',n:11,phase:'Groupes',group:'B',h:'Bosnie-Herzégovine',a:'Qatar',hf:'🇧🇦',af:'🇶🇦',venue:'Seattle',kickoffUTC:'2026-06-24T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g012',n:12,phase:'Groupes',group:'B',h:'Suisse',a:'Canada',hf:'🇨🇭',af:'🇨🇦',venue:'Vancouver',kickoffUTC:'2026-06-24T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE C — Brésil · Maroc · Haïti · Écosse
+  {id:'g013',n:13,phase:'Groupes',group:'C',h:'Brésil',a:'Maroc',hf:'🇧🇷',af:'🇲🇦',venue:'New York/NJ',kickoffUTC:'2026-06-13T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g014',n:14,phase:'Groupes',group:'C',h:'Haïti',a:'Écosse',hf:'🇭🇹',af:'🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Boston',kickoffUTC:'2026-06-14T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g015',n:15,phase:'Groupes',group:'C',h:'Écosse',a:'Maroc',hf:'🏴󠁧󠁢󠁳󠁣󠁴󠁿',af:'🇲🇦',venue:'Boston',kickoffUTC:'2026-06-19T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g016',n:16,phase:'Groupes',group:'C',h:'Brésil',a:'Haïti',hf:'🇧🇷',af:'🇭🇹',venue:'Philadelphia',kickoffUTC:'2026-06-20T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g017',n:17,phase:'Groupes',group:'C',h:'Maroc',a:'Haïti',hf:'🇲🇦',af:'🇭🇹',venue:'Atlanta',kickoffUTC:'2026-06-25T00:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g018',n:18,phase:'Groupes',group:'C',h:'Écosse',a:'Brésil',hf:'🏴󠁧󠁢󠁳󠁣󠁴󠁿',af:'🇧🇷',venue:'Miami',kickoffUTC:'2026-06-25T00:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE D — États-Unis · Paraguay · Australie · Turquie
+  {id:'g019',n:19,phase:'Groupes',group:'D',h:'États-Unis',a:'Paraguay',hf:'🇺🇸',af:'🇵🇾',venue:'Los Angeles',kickoffUTC:'2026-06-13T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g020',n:20,phase:'Groupes',group:'D',h:'Australie',a:'Turquie',hf:'🇦🇺',af:'🇹🇷',venue:'Vancouver',kickoffUTC:'2026-06-13T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g021',n:21,phase:'Groupes',group:'D',h:'États-Unis',a:'Australie',hf:'🇺🇸',af:'🇦🇺',venue:'Seattle',kickoffUTC:'2026-06-19T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g022',n:22,phase:'Groupes',group:'D',h:'Turquie',a:'Paraguay',hf:'🇹🇷',af:'🇵🇾',venue:'San Francisco',kickoffUTC:'2026-06-20T04:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g023',n:23,phase:'Groupes',group:'D',h:'Turquie',a:'États-Unis',hf:'🇹🇷',af:'🇺🇸',venue:'Los Angeles',kickoffUTC:'2026-06-25T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g024',n:24,phase:'Groupes',group:'D',h:'Paraguay',a:'Australie',hf:'🇵🇾',af:'🇦🇺',venue:'San Francisco',kickoffUTC:'2026-06-25T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE E — Allemagne · Curaçao · Côte d'Ivoire · Équateur
+  {id:'g025',n:25,phase:'Groupes',group:'E',h:'Allemagne',a:'Curaçao',hf:'🇩🇪',af:'🇨🇼',venue:'Houston',kickoffUTC:'2026-06-14T17:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g026',n:26,phase:'Groupes',group:'E',h:"Côte d'Ivoire",a:'Équateur',hf:'🇨🇮',af:'🇪🇨',venue:'Philadelphia',kickoffUTC:'2026-06-14T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g027',n:27,phase:'Groupes',group:'E',h:'Allemagne',a:"Côte d'Ivoire",hf:'🇩🇪',af:'🇨🇮',venue:'Toronto',kickoffUTC:'2026-06-20T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g028',n:28,phase:'Groupes',group:'E',h:'Équateur',a:'Curaçao',hf:'🇪🇨',af:'🇨🇼',venue:'Kansas City',kickoffUTC:'2026-06-20T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g029',n:29,phase:'Groupes',group:'E',h:'Équateur',a:'Allemagne',hf:'🇪🇨',af:'🇩🇪',venue:'New York/NJ',kickoffUTC:'2026-06-25T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g030',n:30,phase:'Groupes',group:'E',h:'Curaçao',a:"Côte d'Ivoire",hf:'🇨🇼',af:'🇨🇮',venue:'Philadelphia',kickoffUTC:'2026-06-25T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE F — Pays-Bas · Japon · Tunisie · Suède
+  {id:'g031',n:31,phase:'Groupes',group:'F',h:'Pays-Bas',a:'Japon',hf:'🇳🇱',af:'🇯🇵',venue:'Dallas',kickoffUTC:'2026-06-14T23:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g032',n:32,phase:'Groupes',group:'F',h:'Suède',a:'Tunisie',hf:'🇸🇪',af:'🇹🇳',venue:'Monterrey',kickoffUTC:'2026-06-15T02:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g033',n:33,phase:'Groupes',group:'F',h:'Pays-Bas',a:'Suède',hf:'🇳🇱',af:'🇸🇪',venue:'Houston',kickoffUTC:'2026-06-20T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g034',n:34,phase:'Groupes',group:'F',h:'Tunisie',a:'Japon',hf:'🇹🇳',af:'🇯🇵',venue:'Monterrey',kickoffUTC:'2026-06-21T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g035',n:35,phase:'Groupes',group:'F',h:'Japon',a:'Suède',hf:'🇯🇵',af:'🇸🇪',venue:'Dallas',kickoffUTC:'2026-06-26T00:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g036',n:36,phase:'Groupes',group:'F',h:'Tunisie',a:'Pays-Bas',hf:'🇹🇳',af:'🇳🇱',venue:'Kansas City',kickoffUTC:'2026-06-26T00:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE G — Belgique · Égypte · Iran · Nouvelle-Zélande
+  {id:'g037',n:37,phase:'Groupes',group:'G',h:'Belgique',a:'Égypte',hf:'🇧🇪',af:'🇪🇬',venue:'Seattle',kickoffUTC:'2026-06-15T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g038',n:38,phase:'Groupes',group:'G',h:'Iran',a:'Nouvelle-Zélande',hf:'🇮🇷',af:'🇳🇿',venue:'Los Angeles',kickoffUTC:'2026-06-16T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g039',n:39,phase:'Groupes',group:'G',h:'Belgique',a:'Iran',hf:'🇧🇪',af:'🇮🇷',venue:'Los Angeles',kickoffUTC:'2026-06-21T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g040',n:40,phase:'Groupes',group:'G',h:'Nouvelle-Zélande',a:'Égypte',hf:'🇳🇿',af:'🇪🇬',venue:'Vancouver',kickoffUTC:'2026-06-21T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g041',n:41,phase:'Groupes',group:'G',h:'Égypte',a:'Iran',hf:'🇪🇬',af:'🇮🇷',venue:'Seattle',kickoffUTC:'2026-06-26T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g042',n:42,phase:'Groupes',group:'G',h:'Nouvelle-Zélande',a:'Belgique',hf:'🇳🇿',af:'🇧🇪',venue:'Vancouver',kickoffUTC:'2026-06-26T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE H — Espagne · Cap-Vert · Arabie Saoudite · Uruguay
+  {id:'g043',n:43,phase:'Groupes',group:'H',h:'Espagne',a:'Cap-Vert',hf:'🇪🇸',af:'🇨🇻',venue:'Atlanta',kickoffUTC:'2026-06-15T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g044',n:44,phase:'Groupes',group:'H',h:'Arabie Saoudite',a:'Uruguay',hf:'🇸🇦',af:'🇺🇾',venue:'Miami',kickoffUTC:'2026-06-15T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g045',n:45,phase:'Groupes',group:'H',h:'Espagne',a:'Arabie Saoudite',hf:'🇪🇸',af:'🇸🇦',venue:'Atlanta',kickoffUTC:'2026-06-21T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g046',n:46,phase:'Groupes',group:'H',h:'Uruguay',a:'Cap-Vert',hf:'🇺🇾',af:'🇨🇻',venue:'Miami',kickoffUTC:'2026-06-22T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g047',n:47,phase:'Groupes',group:'H',h:'Cap-Vert',a:'Arabie Saoudite',hf:'🇨🇻',af:'🇸🇦',venue:'Houston',kickoffUTC:'2026-06-26T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g048',n:48,phase:'Groupes',group:'H',h:'Uruguay',a:'Espagne',hf:'🇺🇾',af:'🇪🇸',venue:'Guadalajara',kickoffUTC:'2026-06-26T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE I — France · Sénégal · Norvège · Irak
+  {id:'g049',n:49,phase:'Groupes',group:'I',h:'France',a:'Sénégal',hf:'🇫🇷',af:'🇸🇳',venue:'New York/NJ',kickoffUTC:'2026-06-16T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g050',n:50,phase:'Groupes',group:'I',h:'Irak',a:'Norvège',hf:'🇮🇶',af:'🇳🇴',venue:'Boston',kickoffUTC:'2026-06-16T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g051',n:51,phase:'Groupes',group:'I',h:'Norvège',a:'Sénégal',hf:'🇳🇴',af:'🇸🇳',venue:'New York/NJ',kickoffUTC:'2026-06-22T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g052',n:52,phase:'Groupes',group:'I',h:'France',a:'Irak',hf:'🇫🇷',af:'🇮🇶',venue:'Philadelphia',kickoffUTC:'2026-06-22T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g053',n:53,phase:'Groupes',group:'I',h:'Norvège',a:'France',hf:'🇳🇴',af:'🇫🇷',venue:'Boston',kickoffUTC:'2026-06-27T00:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g054',n:54,phase:'Groupes',group:'I',h:'Sénégal',a:'Irak',hf:'🇸🇳',af:'🇮🇶',venue:'Toronto',kickoffUTC:'2026-06-27T00:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE J — Argentine · Algérie · Autriche · Jordanie
+  {id:'g055',n:55,phase:'Groupes',group:'J',h:'Argentine',a:'Algérie',hf:'🇦🇷',af:'🇩🇿',venue:'Kansas City',kickoffUTC:'2026-06-17T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g056',n:56,phase:'Groupes',group:'J',h:'Autriche',a:'Jordanie',hf:'🇦🇹',af:'🇯🇴',venue:'San Francisco',kickoffUTC:'2026-06-17T04:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g057',n:57,phase:'Groupes',group:'J',h:'Argentine',a:'Autriche',hf:'🇦🇷',af:'🇦🇹',venue:'Dallas',kickoffUTC:'2026-06-22T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g058',n:58,phase:'Groupes',group:'J',h:'Jordanie',a:'Algérie',hf:'🇯🇴',af:'🇩🇿',venue:'San Francisco',kickoffUTC:'2026-06-23T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g059',n:59,phase:'Groupes',group:'J',h:'Algérie',a:'Autriche',hf:'🇩🇿',af:'🇦🇹',venue:'Kansas City',kickoffUTC:'2026-06-27T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g060',n:60,phase:'Groupes',group:'J',h:'Jordanie',a:'Argentine',hf:'🇯🇴',af:'🇦🇷',venue:'Dallas',kickoffUTC:'2026-06-27T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE K — Portugal · Ouzbékistan · Colombie · RD Congo
+  {id:'g061',n:61,phase:'Groupes',group:'K',h:'Portugal',a:'RD Congo',hf:'🇵🇹',af:'🇨🇩',venue:'Houston',kickoffUTC:'2026-06-17T17:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g062',n:62,phase:'Groupes',group:'K',h:'Ouzbékistan',a:'Colombie',hf:'🇺🇿',af:'🇨🇴',venue:'Mexico City',kickoffUTC:'2026-06-18T02:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g063',n:63,phase:'Groupes',group:'K',h:'Portugal',a:'Ouzbékistan',hf:'🇵🇹',af:'🇺🇿',venue:'Houston',kickoffUTC:'2026-06-23T16:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g064',n:64,phase:'Groupes',group:'K',h:'Colombie',a:'RD Congo',hf:'🇨🇴',af:'🇨🇩',venue:'Guadalajara',kickoffUTC:'2026-06-23T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g065',n:65,phase:'Groupes',group:'K',h:'Colombie',a:'Portugal',hf:'🇨🇴',af:'🇵🇹',venue:'Miami',kickoffUTC:'2026-06-27T23:30:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g066',n:66,phase:'Groupes',group:'K',h:'RD Congo',a:'Ouzbékistan',hf:'🇨🇩',af:'🇺🇿',venue:'Atlanta',kickoffUTC:'2026-06-27T23:30:00Z',hs:null,as:null,status:'upcoming'},
+  // GROUPE L — Angleterre · Croatie · Ghana · Panama
+  {id:'g067',n:67,phase:'Groupes',group:'L',h:'Angleterre',a:'Croatie',hf:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',af:'🇭🇷',venue:'Dallas',kickoffUTC:'2026-06-17T20:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g068',n:68,phase:'Groupes',group:'L',h:'Ghana',a:'Panama',hf:'🇬🇭',af:'🇵🇦',venue:'Toronto',kickoffUTC:'2026-06-17T23:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g069',n:69,phase:'Groupes',group:'L',h:'Angleterre',a:'Ghana',hf:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',af:'🇬🇭',venue:'Boston',kickoffUTC:'2026-06-24T01:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g070',n:70,phase:'Groupes',group:'L',h:'Panama',a:'Croatie',hf:'🇵🇦',af:'🇭🇷',venue:'Toronto',kickoffUTC:'2026-06-23T22:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g071',n:71,phase:'Groupes',group:'L',h:'Panama',a:'Angleterre',hf:'🇵🇦',af:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',venue:'New York/NJ',kickoffUTC:'2026-06-27T19:00:00Z',hs:null,as:null,status:'upcoming'},
+  {id:'g072',n:72,phase:'Groupes',group:'L',h:'Croatie',a:'Ghana',hf:'🇭🇷',af:'🇬🇭',venue:'Philadelphia',kickoffUTC:'2026-06-27T19:00:00Z',hs:null,as:null,status:'upcoming'},
+];
+
+// Default scoring configuration
+const DEFAULT_SCORING = {
+  phases: {
+    'Groupes':       { exact:5, partial:2, result:3 },
+    'Huitièmes':     { exact:7, partial:3, result:4 },
+    'Quarts':        { exact:9, partial:4, result:5 },
+    'Demi-finales':  { exact:11, partial:5, result:6 },
+    '3ème Place':    { exact:8, partial:3, result:4 },
+    'Finale':        { exact:15, partial:7, result:8 },
+  }
+};
+
+// ══════════════════════════════════════════
+//  🔥  FIREBASE INIT
+// ══════════════════════════════════════════
+try {
+  firebase.initializeApp(CONFIG.firebase);
+} catch(e) {
+  console.error('Firebase init error:', e);
+}
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+// ══════════════════════════════════════════
+//  🛠  UTILITY FUNCTIONS
+// ══════════════════════════════════════════
+function calcPoints(pred, match, scoring) {
+  if (match.hs === null || match.as === null) return 0;
+  const ps = scoring.phases[match.phase] || { exact:5, partial:2, result:3 };
+  let pts = 0;
+  // Score component
+  if (pred.hs === match.hs && pred.as === match.as) {
+    pts += ps.exact;
+  } else if (pred.hs === match.hs || pred.as === match.as) {
+    pts += ps.partial;
+  }
+  // Result component (fully independent)
+  const actualRes = match.hs > match.as ? 'home' : match.hs < match.as ? 'away' : 'draw';
+  if (pred.res === actualRes) pts += ps.result;
+  return pts;
+}
+
+// Formatage en heure de Paris (CEST = UTC+2 en été, CET = UTC+1 en hiver)
+// On utilise timeZone:'Europe/Paris' — le navigateur fait la conversion proprement.
+const TZ = 'Europe/Paris';
+ 
+function fmtTime(isoStr) {
+  return new Date(isoStr).toLocaleTimeString('fr-FR', {
+    hour: '2-digit', minute: '2-digit', timeZone: TZ
+  });
+}
+// Retourne "YYYY-MM-DD" dans le fuseau de Paris (pour grouper les matchs par jour)
+function fmtDateKey(isoStr) {
+  return new Date(isoStr).toLocaleDateString('fr-CA', { timeZone: TZ });
+  // fr-CA donne le format ISO YYYY-MM-DD
+}
+function fmtDateHeader(dateKey) {
+  // On reconstruit une date locale à midi pour éviter tout glissement DST
+  const d = new Date(dateKey + 'T12:00:00');
+  return d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+}
+
+function shortName(name) {
+  const parts = name.split(' ');
+  if (parts.length === 1) return name.length > 10 ? name.slice(0,9)+'.' : name;
+  return parts.map(p => p.length > 8 ? p.slice(0,7)+'.' : p).join(' ');
+}
+
+// ══════════════════════════════════════════
+//  🖥  VUE APPLICATION
+// ══════════════════════════════════════════
+const { createApp, ref, computed, watch, onMounted, reactive } = Vue;
+
+createApp({
+  setup() {
+    // ── State ──
+    const page        = ref('loading');
+    const user        = ref(null);
+    const userData    = ref(null);
+    const authTab     = ref('login');
+    const authBusy    = ref(false);
+    const authErr     = ref('');
+    const f           = reactive({ email:'', pw:'', name:'', adminCode:'' });
+
+    const matches     = ref([]);
+    const preds       = ref({});   // matchId → pred doc for current user
+    const leaderboard = ref([]);
+    const scoring     = ref(JSON.parse(JSON.stringify(DEFAULT_SCORING)));
+
+    const selPhase    = ref('Groupes');
+    const selGroup    = ref('');
+    const expandedId  = ref(null);
+    const drafts      = reactive({});  // matchId → { res, hs, as }
+
+    const detailMatch = ref(null);
+    const detailPreds = ref([]);
+    const loadingDetail = ref(false);
+
+    const saving      = ref(false);
+    const adminBusy   = ref(false);
+    const adminTab    = ref('matchs');
+    const fdToken     = ref('');
+    const apiMsg      = ref(null);
+    const toast       = ref('');
+
+    const resultEntry = reactive({ matchId:'', hs:null, as:null });
+    const newM        = reactive({ phase:'', h:'', a:'', hf:'⬜', af:'⬜', venue:'', dateLocal:'' });
+
+    // ── Nav ──
+    const navTabs = computed(() => {
+      const tabs = [
+        { key:'matches',    icon:'⚽', label:'Matchs'    },
+        { key:'leaderboard',icon:'🏆', label:'Classement' },
+      ];
+      if (userData.value?.isAdmin) tabs.push({ key:'admin', icon:'⚙️', label:'Admin' });
+      return tabs;
+    });
+
+    const adminTabs = [
+      { key:'matchs',    label:'Matchs' },
+      { key:'points',    label:'Points' },
+      { key:'resultats', label:'Résultats' },
+    ];
+
+    const pageTitle = computed(() => {
+      if (page.value==='matches')    return selPhase.value + (selGroup.value?' · Groupe '+selGroup.value:'');
+      if (page.value==='leaderboard') return 'Classement';
+      if (page.value==='admin')       return 'Administration';
+      if (page.value==='detail')      return 'Pronos du match';
+      return '';
+    });
+
+    const myTotalPts = computed(() => {
+      return Object.values(preds.value).reduce((s,p)=>s+(p.pts||0),0);
+    });
+
+    const availablePhases = computed(() => {
+      const set = new Set(matches.value.map(m=>m.phase));
+      return ['Groupes','Huitièmes','Quarts','Demi-finales','3ème Place','Finale'].filter(p=>set.has(p));
+    });
+
+    const sortedMatches = computed(() => [...matches.value].sort((a,b)=>a.kickoffUTC.localeCompare(b.kickoffUTC)));
+
+    const filteredMatches = computed(() => {
+      return sortedMatches.value.filter(m => {
+        if (m.phase !== selPhase.value) return false;
+        if (selGroup.value && m.group !== selGroup.value) return false;
+        return true;
+      });
+    });
+
+    const groupedMatches = computed(() => {
+      const groups = {};
+      for (const m of filteredMatches.value) {
+        const key = fmtDateKey(m.kickoffUTC);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(m);
+      }
+      return groups;
+    });
+
+    // ── Helpers ──
+    function isLocked(m) {
+      return Date.now() >= new Date(m.kickoffUTC).getTime();
+    }
+    function myPred(matchId) {
+      return preds.value[matchId] || null;
+    }
+    function fmtKickoff(iso) { return fmtTime(iso); }
+
+    function statusPillClass(m) {
+      if (m.status==='finished') return 'bg-gray-100 text-gray-500';
+      if (m.status==='live')     return 'bg-red-100 text-red-600';
+      if (isLocked(m))           return 'bg-orange-100 text-orange-600';
+      return 'bg-green-100 text-green-700';
+    }
+    function statusPillLabel(m) {
+      if (m.status==='finished') return 'Terminé';
+      if (m.status==='live')     return '● En direct';
+      if (isLocked(m))           return '🔒 Verrouillé';
+      const diff = new Date(m.kickoffUTC) - Date.now();
+      if (diff < 3600000) return '⏱ Bientôt';
+      return `Gr.${m.group||''} · J${m.n}`;
+    }
+    function resLabel(res, m) {
+      if (!res) return '—';
+      if (res==='home') return m.h;
+      if (res==='away') return m.a;
+      return 'Nul';
+    }
+
+    // ── Draft management ──
+    function getDraft(id) {
+      if (!drafts[id]) {
+        const p = preds.value[id];
+        drafts[id] = p
+          ? { res: p.res, hs: p.hs, as: p.as }
+          : { res: null,  hs: '', as: '' };
+      }
+      return drafts[id];
+    }
+    function draftRes(id) { return getDraft(id).res; }
+    function draftHs(id)  { return getDraft(id).hs; }
+    function draftAs(id)  { return getDraft(id).as; }
+    function setRes(id, v) { getDraft(id).res = v; }
+    function setHs(id, v)  { getDraft(id).hs  = v===''?'':parseInt(v,10); }
+    function setAs(id, v)  { getDraft(id).as  = v===''?'':parseInt(v,10); }
+    function canSave(id) {
+      const d = getDraft(id);
+      return d.res !== null && d.hs !== '' && d.as !== '' && d.hs !== null && d.as !== null && !isNaN(d.hs) && !isNaN(d.as);
+    }
+
+    // ── Toast ──
+    function showToast(msg) {
+      toast.value = msg;
+      setTimeout(()=>{ toast.value = ''; }, 2500);
+    }
+
+    // ── Auth ──
+    async function doLogin() {
+      authErr.value=''; authBusy.value=true;
+      try {
+        await auth.signInWithEmailAndPassword(f.email, f.pw);
+      } catch(e) {
+        authErr.value = fmtAuthErr(e.code);
+      } finally { authBusy.value=false; }
+    }
+    async function doRegister() {
+      authErr.value=''; authBusy.value=true;
+      if (!f.name.trim()) { authErr.value='Pseudo requis.'; authBusy.value=false; return; }
+      try {
+        const cred = await auth.createUserWithEmailAndPassword(f.email, f.pw);
+        const isAdmin = f.adminCode.trim() === CONFIG.adminCode;
+        await db.collection('users').doc(cred.user.uid).set({
+          username: f.name.trim(),
+          email: f.email,
+          isAdmin,
+          pts: 0,
+          count: 0,
+          exact: 0,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        if (isAdmin) showToast('🛡️ Compte admin créé !');
+      } catch(e) {
+        authErr.value = fmtAuthErr(e.code);
+      } finally { authBusy.value=false; }
+    }
+    async function doLogout() {
+      await auth.signOut();
+    }
+    function fmtAuthErr(code) {
+      const map = {
+        'auth/invalid-email':'Email invalide.',
+        'auth/user-not-found':'Utilisateur introuvable.',
+        'auth/wrong-password':'Mot de passe incorrect.',
+        'auth/email-already-in-use':'Email déjà utilisé.',
+        'auth/weak-password':'Mot de passe trop court (min. 6 car.).',
+        'auth/invalid-credential':'Identifiants incorrects.',
+        'auth/too-many-requests':'Trop de tentatives. Réessaie plus tard.',
+      };
+      return map[code] || 'Erreur : '+code;
+    }
+
+    // ── Data loading ──
+    let unsubMatches = null;
+    let unsubPreds   = null;
+
+    function startListeners() {
+      // Real-time matches
+      unsubMatches = db.collection('matches').orderBy('n').onSnapshot(snap => {
+        matches.value = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+        // Set default phase to first available
+        if (!availablePhases.value.includes(selPhase.value) && availablePhases.value.length) {
+          selPhase.value = availablePhases.value[0];
+        }
+      });
+      // User predictions
+      if (user.value) {
+        unsubPreds = db.collection('predictions')
+          .where('uid','==',user.value.uid)
+          .onSnapshot(snap => {
+            const map = {};
+            snap.docs.forEach(d=>{ map[d.data().matchId] = d.data(); });
+            preds.value = map;
+          });
+      }
+    }
+
+    function stopListeners() {
+      if (unsubMatches) { unsubMatches(); unsubMatches=null; }
+      if (unsubPreds)   { unsubPreds();   unsubPreds=null;   }
+    }
+
+    async function loadLeaderboard() {
+      const snap = await db.collection('users').orderBy('pts','desc').get();
+      leaderboard.value = snap.docs.map(d=>({ uid:d.id, ...d.data() }));
+    }
+
+    async function loadScoring() {
+      try {
+        const doc = await db.collection('settings').doc('scoring').get();
+        if (doc.exists) scoring.value = doc.data();
+      } catch(_) {}
+    }
+
+    // ── Navigation ──
+    function goPage(p) {
+      if (p==='leaderboard') loadLeaderboard();
+      if (p==='admin') loadScoring();
+      page.value = p;
+    }
+    function toggleExpand(id) {
+      expandedId.value = expandedId.value === id ? null : id;
+    }
+    async function openDetail(m) {
+      detailMatch.value = m;
+      page.value = 'detail';
+      loadingDetail.value = true;
+      detailPreds.value = [];
+      try {
+        const snap = await db.collection('predictions').where('matchId','==',m.id).get();
+        const uids = [...new Set(snap.docs.map(d=>d.data().uid))];
+        const users = {};
+        for (const uid of uids) {
+          const u = await db.collection('users').doc(uid).get();
+          if (u.exists) users[uid] = u.data().username;
+        }
+        detailPreds.value = snap.docs.map(d=>{
+          const p = d.data();
+          return { ...p, username: users[p.uid]||'??' };
+        }).sort((a,b)=>(b.pts||0)-(a.pts||0));
+      } finally {
+        loadingDetail.value = false;
+      }
+    }
+
+    // ── Predictions ──
+    async function savePred(matchId) {
+      const m = matches.value.find(x=>x.id===matchId);
+      if (!m || isLocked(m)) { showToast('🔒 Pronos fermés pour ce match'); return; }
+      const d = getDraft(matchId);
+      if (!canSave(matchId)) return;
+      saving.value = true;
+      try {
+        const docId = `${user.value.uid}_${matchId}`;
+        await db.collection('predictions').doc(docId).set({
+          uid: user.value.uid,
+          matchId,
+          res:  d.res,
+          hs:   Number(d.hs),
+          as:   Number(d.as),
+          pts:  0,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast('✅ Pronostic enregistré !');
+        // Update local cache
+        preds.value[matchId] = { uid:user.value.uid, matchId, res:d.res, hs:Number(d.hs), as:Number(d.as), pts:0 };
+        // Sync count on user
+        await db.collection('users').doc(user.value.uid).update({
+          count: firebase.firestore.FieldValue.increment(preds.value[matchId]?0:1)
+        });
+      } catch(e) {
+        showToast('❌ Erreur : '+e.message);
+      } finally { saving.value=false; }
+    }
+
+    // ── Admin: seed matches ──
+    async function seedMatches() {
+      if (!confirm('Initialiser les 72 matchs de poules dans Firestore ? (Vérifie d\'abord qu\'ils n\'existent pas déjà)')) return;
+      adminBusy.value=true;
+      try {
+        const batch = db.batch();
+        for (const m of MATCHES_SEED) {
+          batch.set(db.collection('matches').doc(m.id), m, { merge: true });
+        }
+        await batch.commit();
+        showToast('✅ 72 matchs initialisés !');
+      } catch(e) { showToast('❌ '+e.message); }
+      finally { adminBusy.value=false; }
+    }
+
+    // ── Admin: add knockout match ──
+    async function addMatch() {
+      if (!newM.phase||!newM.h||!newM.a) return;
+      adminBusy.value=true;
+      try {
+        // Convert local datetime (CEST = UTC+2) to UTC
+        const localDate = new Date(newM.dateLocal);
+        const utcIso = newM.dateLocal ? new Date(localDate.getTime() - 2*3600*1000).toISOString() : new Date().toISOString();
+        const docRef = db.collection('matches').doc();
+        await docRef.set({
+          id: docRef.id,
+          n: 100 + Date.now()%10000,
+          phase: newM.phase,
+          group: null,
+          h: newM.h, a: newM.a,
+          hf: newM.hf||'🏳️', af: newM.af||'🏳️',
+          venue: newM.venue||'',
+          kickoffUTC: utcIso,
+          hs: null, as: null,
+          status: 'upcoming',
+        });
+        Object.assign(newM, { phase:'', h:'', a:'', hf:'⬜', af:'⬜', venue:'', dateLocal:'' });
+        showToast('✅ Match ajouté !');
+      } catch(e) { showToast('❌ '+e.message); }
+      finally { adminBusy.value=false; }
+    }
+
+    // ── Admin: save scoring ──
+    async function saveScoring() {
+      adminBusy.value=true;
+      try {
+        await db.collection('settings').doc('scoring').set(JSON.parse(JSON.stringify(scoring.value)));
+        showToast('✅ Barème sauvegardé !');
+      } catch(e) { showToast('❌ '+e.message); }
+      finally { adminBusy.value=false; }
+    }
+
+    // ── Admin: apply manual result ──
+    async function applyResult() {
+      if (!resultEntry.matchId||resultEntry.hs===null||resultEntry.as===null) return;
+      adminBusy.value=true;
+      try {
+        await db.collection('matches').doc(resultEntry.matchId).update({
+          hs: resultEntry.hs,
+          as: resultEntry.as,
+          status: 'finished'
+        });
+        await calcForMatch(resultEntry.matchId);
+        resultEntry.matchId=''; resultEntry.hs=null; resultEntry.as=null;
+        showToast('✅ Résultat enregistré et points calculés !');
+      } catch(e) { showToast('❌ '+e.message); }
+      finally { adminBusy.value=false; }
+    }
+
+    // ── Admin: calc points for one match ──
+    async function calcForMatch(matchId) {
+      const mDoc = await db.collection('matches').doc(matchId).get();
+      const m = { id: matchId, ...mDoc.data() };
+      const sc = scoring.value;
+      const predsSnap = await db.collection('predictions').where('matchId','==',matchId).get();
+      const batch = db.batch();
+      const userDeltas = {};
+      for (const d of predsSnap.docs) {
+        const p = d.data();
+        const pts = calcPoints(p, m, sc);
+        const oldPts = p.pts||0;
+        batch.update(d.ref, { pts });
+        if (!userDeltas[p.uid]) userDeltas[p.uid] = { delta:0, exact:0 };
+        userDeltas[p.uid].delta += (pts - oldPts);
+        if (pts === (sc.phases[m.phase]?.exact||5) + (sc.phases[m.phase]?.result||3)) userDeltas[p.uid].exact++;
+      }
+      // Update user totals
+      for (const [uid, v] of Object.entries(userDeltas)) {
+        batch.update(db.collection('users').doc(uid), {
+          pts:   firebase.firestore.FieldValue.increment(v.delta),
+          exact: firebase.firestore.FieldValue.increment(v.exact)
+        });
+      }
+      await batch.commit();
+    }
+
+    // ── Admin: recalculate all ──
+    async function recalcAll() {
+      if (!confirm('Recalculer les points de TOUS les matchs terminés ? Cela peut prendre un moment.')) return;
+      adminBusy.value=true;
+      showToast('⏳ Recalcul en cours…');
+      try {
+        // Reset all user pts
+        const usersSnap = await db.collection('users').get();
+        const resetBatch = db.batch();
+        usersSnap.docs.forEach(d => resetBatch.update(d.ref, { pts:0, exact:0 }));
+        await resetBatch.commit();
+
+        // Recalc match by match
+        const finishedSnap = await db.collection('matches').where('status','==','finished').get();
+        for (const d of finishedSnap.docs) {
+          await calcForMatch(d.id);
+        }
+        showToast('✅ Recalcul terminé !');
+        await loadLeaderboard();
+      } catch(e) { showToast('❌ '+e.message); }
+      finally { adminBusy.value=false; }
+    }
+
+    // ── Admin: fetch from API ──
+    async function fetchAPIResults() {
+      if (!fdToken.value) return;
+      adminBusy.value=true; apiMsg.value=null;
+      try {
+        // Call football-data.org API — WC 2026 competition code: WC
+        const resp = await fetch('https://api.football-data.org/v4/competitions/WC/matches?season=2026', {
+          headers: { 'X-Auth-Token': fdToken.value }
+        });
+        if (!resp.ok) throw new Error(`API Error ${resp.status}`);
+        const data = await resp.json();
+        const finished = (data.matches||[]).filter(m=>m.status==='FINISHED');
+        if (!finished.length) { apiMsg.value={ok:true,text:'Aucun match terminé trouvé.'}; return; }
+
+        let updated=0;
+        for (const apim of finished) {
+          // Try to find match in our DB by team names
+          const snap = await db.collection('matches')
+            .where('status','!=','finished')
+            .get();
+          for (const d of snap.docs) {
+            const local = d.data();
+            const apiHome = apim.homeTeam?.name||'';
+            const apiAway = apim.awayTeam?.name||'';
+            // Fuzzy match by checking if team names partially match
+            const homeMatch = apiHome.toLowerCase().includes(local.h.toLowerCase().slice(0,5)) ||
+                              local.h.toLowerCase().includes(apiHome.toLowerCase().slice(0,5));
+            const awayMatch = apiAway.toLowerCase().includes(local.a.toLowerCase().slice(0,5)) ||
+                              local.a.toLowerCase().includes(apiAway.toLowerCase().slice(0,5));
+            if (homeMatch && awayMatch) {
+              const hs = apim.score?.fullTime?.home ?? null;
+              const as_ = apim.score?.fullTime?.away ?? null;
+              if (hs!==null && as_!==null) {
+                await db.collection('matches').doc(d.id).update({ hs, as: as_, status:'finished' });
+                await calcForMatch(d.id);
+                updated++;
+              }
+              break;
+            }
+          }
+        }
+        apiMsg.value = { ok:true, text:`✅ ${updated} match(s) mis à jour et points calculés !` };
+        await loadLeaderboard();
+      } catch(e) {
+        apiMsg.value = { ok:false, text:'Erreur : '+e.message };
+      } finally { adminBusy.value=false; }
+    }
+
+    // ── Auth listener ──
+    onMounted(() => {
+      auth.onAuthStateChanged(async u => {
+        if (u) {
+          user.value = u;
+          // Load user data
+          const doc = await db.collection('users').doc(u.uid).get();
+          userData.value = doc.exists ? { uid:u.uid, ...doc.data() } : null;
+          // Load scoring settings
+          await loadScoring();
+          // Start real-time listeners
+          startListeners();
+          page.value = 'matches';
+        } else {
+          user.value = null;
+          userData.value = null;
+          stopListeners();
+          matches.value = [];
+          preds.value = {};
+          page.value = 'auth';
+        }
+      });
+    });
+
+    return {
+      // State
+      page, user, userData, authTab, authBusy, authErr, f,
+      matches, preds, leaderboard, scoring,
+      selPhase, selGroup, expandedId, drafts,
+      detailMatch, detailPreds, loadingDetail,
+      saving, adminBusy, adminTab, fdToken, apiMsg, toast,
+      resultEntry, newM,
+      // Computed
+      navTabs, adminTabs, pageTitle, myTotalPts,
+      availablePhases, sortedMatches, filteredMatches, groupedMatches,
+      // Methods
+      isLocked, myPred, fmtKickoff, fmtDateHeader, fmtDateKey,
+      statusPillClass, statusPillLabel, resLabel, shortName,
+      draftRes, draftHs, draftAs, setRes, setHs, setAs, canSave,
+      doLogin, doRegister, doLogout,
+      toggleExpand, openDetail, goPage,
+      savePred,
+      seedMatches, addMatch, saveScoring, applyResult, recalcAll, fetchAPIResults,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
