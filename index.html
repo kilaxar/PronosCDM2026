@@ -526,47 +526,133 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 
       <!-- Tab: Résultats -->
       <div v-if="adminTab==='resultats'" class="p-3 space-y-3">
-        <!-- API fetch: résultats -->
+
+        <!-- ⚠️ Règles Firestore -->
+        <div class="rounded-2xl overflow-hidden border-2 border-red-200 bg-red-50">
+          <button @click="showRules=!showRules" class="w-full flex items-center justify-between px-4 py-3">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🔐</span>
+              <span class="font-black text-sm text-red-700">Règles Firestore requises</span>
+              <span class="pill bg-red-100 text-red-600">IMPORTANT</span>
+            </div>
+            <span class="text-red-400 text-sm">{{ showRules?'▲':'▼' }}</span>
+          </button>
+          <div v-if="showRules" class="px-4 pb-4">
+            <p class="text-xs text-red-600 mb-2 font-semibold">Pour que le calcul des points fonctionne, tu dois copier ces règles dans <b>Firebase Console → Firestore → Règles</b> :</p>
+            <div class="relative">
+              <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-xl overflow-x-auto leading-relaxed">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    function isAuth() { return request.auth != null; }
+
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId || isAdmin();
+    }
+    match /matches/{matchId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    match /predictions/{predId} {
+      allow read: if isAuth();
+      allow create: if isAuth() &amp;&amp; request.auth.uid == request.resource.data.uid;
+      allow update: if isAuth() &amp;&amp; (resource.data.uid == request.auth.uid || isAdmin());
+    }
+    match /settings/{docId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+  }
+}</pre>
+              <button @click="copyRules" class="absolute top-2 right-2 bg-white/10 hover:bg-white/20 text-white text-xs px-2 py-1 rounded-lg font-bold">Copier</button>
+            </div>
+            <p class="text-xs text-red-500 mt-2">⚡ La ligne clé : <code class="bg-red-100 px-1 rounded">allow update: if isAuth() &amp;&amp; (resource.data.uid == request.auth.uid || isAdmin())</code> — elle autorise l'admin à mettre à jour les points.</p>
+          </div>
+        </div>
+
+        <!-- API fetch -->
         <div class="card p-4 shadow-sm">
           <h3 class="font-black text-sm text-pitch-800 mb-1">🌐 Récupérer les résultats automatiquement</h3>
-          <p class="text-xs text-gray-400 mb-3">Utilise l'API <b>football-data.org</b> (gratuit). Crée un compte sur <a href="https://www.football-data.org" target="_blank" class="text-pitch-600 underline">football-data.org</a> pour obtenir ton token.</p>
+          <p class="text-xs text-gray-400 mb-3">API <b>football-data.org</b> (gratuit). Token disponible sur <a href="https://www.football-data.org" target="_blank" class="text-pitch-600 underline">football-data.org</a></p>
           <input v-model="fdToken" type="text" placeholder="Token API football-data.org" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pitch-500 mb-2">
           <div class="flex flex-col gap-2">
             <button @click="fetchAPIResults" :disabled="adminBusy||!fdToken" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#0d4a24">🔄 Récupérer les résultats (matchs finis)</button>
             <button @click="fetchKnockoutFixtures" :disabled="adminBusy||!fdToken" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#1d4ed8">📥 Importer les matchs éliminatoires</button>
           </div>
-          <p class="text-xs text-gray-400 mt-2">Le bouton bleu importe automatiquement les 1/16, 1/8, quarts… dès que les équipes sont connues (après la phase de groupes).</p>
           <p v-if="apiMsg" class="mt-2 text-xs text-center font-medium" :class="apiMsg.ok?'text-green-600':'text-red-500'">{{ apiMsg.text }}</p>
         </div>
 
-        <!-- Manual result entry -->
-        <div class="card p-4 shadow-sm">
-          <h3 class="font-black text-sm text-pitch-800 mb-3">✏️ Saisie manuelle d'un résultat</h3>
-          <div class="space-y-2">
-            <select v-model="resultEntry.matchId" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pitch-500">
-              <option value="">Sélectionner un match…</option>
-              <option v-for="m in sortedMatches" :key="m.id" :value="m.id">{{ m.h }} vs {{ m.a }} ({{ fmtKickoff(m.kickoffUTC) }})</option>
-            </select>
-            <div class="flex gap-3 items-center justify-center py-2">
-              <div class="text-center">
-                <label class="text-xs text-gray-400 font-semibold">Domicile</label>
-                <input v-model.number="resultEntry.hs" type="number" min="0" max="99" class="score-box mt-1">
+        <!-- Finished matches: modify / cancel -->
+        <div v-if="finishedMatches.length" class="card shadow-sm overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="font-black text-sm text-pitch-800">✅ Matchs terminés</h3>
+            <span class="text-xs text-gray-400">{{ finishedMatches.length }} matchs</span>
+          </div>
+          <div class="divide-y divide-gray-50">
+            <div v-for="m in finishedMatches" :key="m.id" class="px-4 py-3">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-sm font-semibold text-gray-700 flex-1 text-right">{{ m.h }} {{ m.hf }}</span>
+                <span class="font-mono font-black text-pitch-800 text-lg min-w-[52px] text-center">{{ m.hs }}-{{ m.as }}</span>
+                <span class="text-sm font-semibold text-gray-700 flex-1">{{ m.af }} {{ m.a }}</span>
               </div>
-              <div class="text-2xl font-black text-gray-300 mt-4">—</div>
-              <div class="text-center">
-                <label class="text-xs text-gray-400 font-semibold">Extérieur</label>
-                <input v-model.number="resultEntry.as" type="number" min="0" max="99" class="score-box mt-1">
+              <div class="flex gap-2">
+                <button @click="editResult(m)" class="flex-1 py-1.5 rounded-lg text-xs font-bold border border-pitch-200 text-pitch-700 bg-pitch-50">✏️ Modifier</button>
+                <button @click="cancelResult(m.id)" :disabled="adminBusy" class="flex-1 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-600 bg-red-50 disabled:opacity-50">🗑️ Annuler</button>
               </div>
             </div>
-            <button @click="applyResult" :disabled="adminBusy||!resultEntry.matchId||resultEntry.hs===null||resultEntry.as===null" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#166534">💾 Enregistrer le résultat</button>
+          </div>
+        </div>
+
+        <!-- Manual result entry -->
+        <div id="result-form" class="card p-4 shadow-sm" :class="resultEntry.isEdit?'ring-2 ring-pitch-400':''">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-black text-sm text-pitch-800">
+              {{ resultEntry.isEdit ? '✏️ Modification du résultat' : '✏️ Saisie manuelle d\'un résultat' }}
+            </h3>
+            <button v-if="resultEntry.isEdit" @click="resultEntry.matchId='';resultEntry.hs=null;resultEntry.as=null;resultEntry.isEdit=false" class="text-xs text-gray-400 font-bold">✕ Annuler</button>
+          </div>
+          <div class="space-y-3">
+            <select v-model="resultEntry.matchId" :disabled="resultEntry.isEdit" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pitch-500 disabled:opacity-60">
+              <option value="">Sélectionner un match…</option>
+              <optgroup label="— À jouer —">
+                <option v-for="m in sortedMatches.filter(x=>x.status!=='finished')" :key="m.id" :value="m.id">{{ m.hf }} {{ m.h }} vs {{ m.a }} {{ m.af }} ({{ fmtKickoff(m.kickoffUTC) }})</option>
+              </optgroup>
+              <optgroup label="— Terminés —">
+                <option v-for="m in finishedMatches" :key="m.id" :value="m.id">{{ m.hf }} {{ m.h }} {{ m.hs }}-{{ m.as }} {{ m.a }} {{ m.af }}</option>
+              </optgroup>
+            </select>
+
+            <!-- Show team names when match selected -->
+            <div v-if="resultEntry.matchId" class="text-center text-sm font-semibold text-gray-600">
+              {{ sortedMatches.find(m=>m.id===resultEntry.matchId)?.h }} vs {{ sortedMatches.find(m=>m.id===resultEntry.matchId)?.a }}
+            </div>
+
+            <div class="flex gap-3 items-center justify-center py-1">
+              <div class="text-center">
+                <label class="text-xs text-gray-400 font-bold block mb-1">Dom.</label>
+                <input v-model.number="resultEntry.hs" type="number" min="0" max="99" class="score-box">
+              </div>
+              <div class="text-2xl font-black text-gray-300">—</div>
+              <div class="text-center">
+                <label class="text-xs text-gray-400 font-bold block mb-1">Ext.</label>
+                <input v-model.number="resultEntry.as" type="number" min="0" max="99" class="score-box">
+              </div>
+            </div>
+            <button @click="applyResult" :disabled="adminBusy||!resultEntry.matchId||resultEntry.hs===null||resultEntry.hs===''||resultEntry.as===null||resultEntry.as===''" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#166534">
+              {{ resultEntry.isEdit ? '💾 Enregistrer la modification' : '💾 Enregistrer le résultat' }}
+            </button>
           </div>
         </div>
 
         <!-- Recalculate all -->
         <div class="card p-4 shadow-sm">
           <h3 class="font-black text-sm text-pitch-800 mb-1">🔁 Recalculer tous les points</h3>
-          <p class="text-xs text-gray-400 mb-3">Recalcule les points de tous les joueurs pour tous les matchs terminés, selon le barème actuel.</p>
-          <button @click="recalcAll" :disabled="adminBusy" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-50" style="background:#7c3aed">🔁 Recalculer les points</button>
+          <p class="text-xs text-gray-400 mb-3">Remet à zéro et recalcule les points de tous les joueurs pour tous les matchs terminés selon le barème actuel. À utiliser après avoir changé le barème.</p>
+          <button @click="recalcAll" :disabled="adminBusy" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-50" style="background:#7c3aed">🔁 Recalculer tous les points</button>
         </div>
       </div>
     </div>
@@ -840,9 +926,41 @@ createApp({
     const apiMsg      = ref(null);
     const toast       = ref('');
 
-    const resultEntry = reactive({ matchId:'', hs:null, as:null });
+    const resultEntry = reactive({ matchId:'', hs:null, as:null, isEdit:false });
     const newM        = reactive({ phase:'', h:'', a:'', hf:'⬜', af:'⬜', venue:'', dateLocal:'' });
+    const showRules   = ref(false);
     const selStandGroup = ref('A');
+
+    function copyRules() {
+      const rules = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    function isAuth() { return request.auth != null; }
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId || isAdmin();
+    }
+    match /matches/{matchId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    match /predictions/{predId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.auth.uid == request.resource.data.uid;
+      allow update: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+    match /settings/{docId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+  }
+}`;
+      navigator.clipboard.writeText(rules).then(() => showToast('✅ Règles copiées dans le presse-papiers !'));
+    }
 
     // ── Nav ──
     const navTabs = computed(() => {
@@ -1201,21 +1319,92 @@ createApp({
       finally { adminBusy.value=false; }
     }
 
-    // ── Admin: apply manual result ──
+    // ── Admin: apply manual result (new or modification) ──
     async function applyResult() {
-      if (!resultEntry.matchId||resultEntry.hs===null||resultEntry.as===null) return;
-      adminBusy.value=true;
+      if (!resultEntry.matchId || resultEntry.hs === null || resultEntry.as === null) return;
+      adminBusy.value = true;
       try {
+        const matchDoc = await db.collection('matches').doc(resultEntry.matchId).get();
+        const wasFinished = matchDoc.exists && matchDoc.data().status === 'finished';
+
+        // If already finished → first zero out old points to avoid double-counting
+        if (wasFinished) {
+          const oldPreds = await db.collection('predictions').where('matchId','==',resultEntry.matchId).get();
+          if (oldPreds.size > 0) {
+            const resetBatch = db.batch();
+            for (const d of oldPreds.docs) {
+              const oldPts = d.data().pts || 0;
+              resetBatch.update(d.ref, { pts: 0 });
+              if (oldPts !== 0) {
+                resetBatch.update(db.collection('users').doc(d.data().uid), {
+                  pts: firebase.firestore.FieldValue.increment(-oldPts)
+                });
+              }
+            }
+            await resetBatch.commit();
+          }
+        }
+
+        // Save the result
         await db.collection('matches').doc(resultEntry.matchId).update({
-          hs: resultEntry.hs,
-          as: resultEntry.as,
-          status: 'finished'
+          hs: resultEntry.hs, as: resultEntry.as, status: 'finished'
         });
+
+        // Calculate points automatically
         await calcForMatch(resultEntry.matchId);
-        resultEntry.matchId=''; resultEntry.hs=null; resultEntry.as=null;
-        showToast('✅ Résultat enregistré et points calculés !');
-      } catch(e) { showToast('❌ '+e.message); }
-      finally { adminBusy.value=false; }
+
+        resultEntry.matchId = ''; resultEntry.hs = null; resultEntry.as = null;
+        resultEntry.isEdit = false;
+        showToast(wasFinished ? '✅ Résultat modifié et points recalculés !' : '✅ Résultat enregistré et points calculés !');
+        await loadLeaderboard();
+      } catch(e) {
+        const msg = e.code === 'permission-denied'
+          ? '❌ Permissions insuffisantes — corrige les règles Firestore (voir encadré rouge)'
+          : '❌ '+e.message;
+        showToast(msg);
+      } finally { adminBusy.value = false; }
+    }
+
+    // ── Admin: cancel a result ──
+    async function cancelResult(matchId) {
+      if (!confirm('Annuler ce résultat ? Les points de tous les joueurs pour ce match seront remis à zéro.')) return;
+      adminBusy.value = true;
+      try {
+        const predsSnap = await db.collection('predictions').where('matchId','==',matchId).get();
+        const batch = db.batch();
+        for (const d of predsSnap.docs) {
+          const oldPts = d.data().pts || 0;
+          batch.update(d.ref, { pts: 0 });
+          if (oldPts !== 0) {
+            batch.update(db.collection('users').doc(d.data().uid), {
+              pts: firebase.firestore.FieldValue.increment(-oldPts)
+            });
+          }
+        }
+        batch.update(db.collection('matches').doc(matchId), {
+          hs: null, as: null, status: 'upcoming'
+        });
+        await batch.commit();
+        showToast('✅ Résultat annulé — match repassé en "à venir"');
+        await loadLeaderboard();
+      } catch(e) {
+        const msg = e.code === 'permission-denied'
+          ? '❌ Permissions insuffisantes — corrige les règles Firestore (voir encadré rouge)'
+          : '❌ '+e.message;
+        showToast(msg);
+      } finally { adminBusy.value = false; }
+    }
+
+    // ── Admin: pre-fill form to edit an existing result ──
+    function editResult(m) {
+      resultEntry.matchId = m.id;
+      resultEntry.hs = m.hs;
+      resultEntry.as = m.as;
+      resultEntry.isEdit = true;
+      // Scroll to form
+      setTimeout(() => {
+        document.getElementById('result-form')?.scrollIntoView({ behavior:'smooth', block:'center' });
+      }, 100);
     }
 
     // ── Admin: calc points for one match ──
@@ -1224,18 +1413,19 @@ createApp({
       const m = { id: matchId, ...mDoc.data() };
       const sc = scoring.value;
       const predsSnap = await db.collection('predictions').where('matchId','==',matchId).get();
+      if (predsSnap.empty) return;
       const batch = db.batch();
       const userDeltas = {};
       for (const d of predsSnap.docs) {
         const p = d.data();
         const pts = calcPoints(p, m, sc);
-        const oldPts = p.pts||0;
+        const oldPts = p.pts || 0;
         batch.update(d.ref, { pts });
         if (!userDeltas[p.uid]) userDeltas[p.uid] = { delta:0, exact:0 };
         userDeltas[p.uid].delta += (pts - oldPts);
-        if (pts === (sc.phases[m.phase]?.exact||5) + (sc.phases[m.phase]?.result||3)) userDeltas[p.uid].exact++;
+        const ps = sc.phases[m.phase] || {};
+        if (pts > 0 && p.hs === m.hs && p.as === m.as) userDeltas[p.uid].exact++;
       }
-      // Update user totals
       for (const [uid, v] of Object.entries(userDeltas)) {
         batch.update(db.collection('users').doc(uid), {
           pts:   firebase.firestore.FieldValue.increment(v.delta),
@@ -1248,14 +1438,22 @@ createApp({
     // ── Admin: recalculate all ──
     async function recalcAll() {
       if (!confirm('Recalculer les points de TOUS les matchs terminés ? Cela peut prendre un moment.')) return;
-      adminBusy.value=true;
+      adminBusy.value = true;
       showToast('⏳ Recalcul en cours…');
       try {
-        // Reset all user pts
+        // Reset all user pts and exact counts
         const usersSnap = await db.collection('users').get();
         const resetBatch = db.batch();
         usersSnap.docs.forEach(d => resetBatch.update(d.ref, { pts:0, exact:0 }));
         await resetBatch.commit();
+
+        // Reset pts on all predictions
+        const allPreds = await db.collection('predictions').get();
+        if (allPreds.size > 0) {
+          const predBatch = db.batch();
+          allPreds.docs.forEach(d => predBatch.update(d.ref, { pts:0 }));
+          await predBatch.commit();
+        }
 
         // Recalc match by match
         const finishedSnap = await db.collection('matches').where('status','==','finished').get();
@@ -1264,8 +1462,12 @@ createApp({
         }
         showToast('✅ Recalcul terminé !');
         await loadLeaderboard();
-      } catch(e) { showToast('❌ '+e.message); }
-      finally { adminBusy.value=false; }
+      } catch(e) {
+        const msg = e.code === 'permission-denied'
+          ? '❌ Permissions insuffisantes — mets à jour les règles Firestore (voir encadré Admin)'
+          : '❌ ' + e.message;
+        showToast(msg);
+      } finally { adminBusy.value = false; }
     }
 
     // ── Admin: fetch from API ──
@@ -1394,6 +1596,10 @@ createApp({
       });
     });
 
+    const finishedMatches = computed(() =>
+      sortedMatches.value.filter(m => m.status === 'finished')
+    );
+
     return {
       // State
       page, user, userData, authTab, authBusy, authErr, f,
@@ -1402,11 +1608,11 @@ createApp({
       selStandGroup,
       detailMatch, detailPreds, loadingDetail,
       saving, adminBusy, adminTab, fdToken, apiMsg, toast,
-      resultEntry, newM,
+      resultEntry, newM, showRules,
       // Computed
       navTabs, adminTabs, pageTitle, myTotalPts,
       availablePhases, sortedMatches, filteredMatches, groupedMatches,
-      groupStandings, groupMatches,
+      groupStandings, groupMatches, finishedMatches,
       // Methods
       isLocked, myPred, fmtKickoff, fmtDateHeader, fmtDateKey,
       statusPillClass, statusPillLabel, resLabel, shortName,
@@ -1414,8 +1620,9 @@ createApp({
       doLogin, doRegister, doLogout,
       toggleExpand, openDetail, goPage,
       savePred,
-      seedMatches, addMatch, saveScoring, applyResult, recalcAll,
-      fetchAPIResults, fetchKnockoutFixtures,
+      seedMatches, addMatch, saveScoring,
+      applyResult, cancelResult, editResult, copyRules,
+      recalcAll, fetchAPIResults, fetchKnockoutFixtures,
     };
   }
 }).mount('#app');
