@@ -576,14 +576,9 @@ service cloud.firestore {
 
         <!-- API fetch -->
         <div class="card p-4 shadow-sm">
-          <h3 class="font-black text-sm text-pitch-800 mb-1">🌐 Récupérer les résultats automatiquement</h3>
-          <p class="text-xs text-gray-400 mb-3">API <b>football-data.org</b> (gratuit). Token disponible sur <a href="https://www.football-data.org" target="_blank" class="text-pitch-600 underline">football-data.org</a></p>
-          <input v-model="fdToken" type="text" placeholder="Token API football-data.org" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pitch-500 mb-2">
-          <div class="flex flex-col gap-2">
-            <button @click="fetchAPIResults" :disabled="adminBusy||!fdToken" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#0d4a24">🔄 Récupérer les résultats (matchs finis)</button>
-            <button @click="fetchKnockoutFixtures" :disabled="adminBusy||!fdToken" class="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40" style="background:#1d4ed8">📥 Importer les matchs éliminatoires</button>
-          </div>
-          <p v-if="apiMsg" class="mt-2 text-xs text-center font-medium" :class="apiMsg.ok?'text-green-600':'text-red-500'">{{ apiMsg.text }}</p>
+          <h3 class="font-black text-sm text-pitch-800 mb-1">🤖 Synchronisation automatique</h3>
+          <p class="text-xs text-gray-600 mb-3">Les résultats et matchs éliminatoires sont synchronisés <b>toutes les 5 minutes</b> avec l'API <b>football-data.org</b></p>
+          <p class="text-xs text-green-600">✅ Synchronisation activée</p>
         </div>
 
         <!-- Finished matches: modify / cancel -->
@@ -922,7 +917,6 @@ createApp({
     const saving      = ref(false);
     const adminBusy   = ref(false);
     const adminTab    = ref('matchs');
-    const fdToken     = ref('');
     const apiMsg      = ref(null);
     const toast       = ref('');
 
@@ -1472,13 +1466,10 @@ service cloud.firestore {
 
     // ── Admin: fetch from API ──
     async function fetchAPIResults() {
-      if (!fdToken.value) return;
       adminBusy.value=true; apiMsg.value=null;
       try {
-        // Call football-data.org API — WC 2026 competition code: WC
-        const resp = await fetch('https://api.football-data.org/v4/competitions/WC/matches?season=2026', {
-          headers: { 'X-Auth-Token': fdToken.value }
-        });
+        // Call serverless function (token is server-side via env vars)
+        const resp = await fetch('/.netlify/functions/fetchResults');
         if (!resp.ok) throw new Error(`API Error ${resp.status}`);
         const data = await resp.json();
         const finished = (data.matches||[]).filter(m=>m.status==='FINISHED');
@@ -1520,7 +1511,6 @@ service cloud.firestore {
 
     // ── Admin: fetch knockout fixtures from API (équipes connues après poules) ──
     async function fetchKnockoutFixtures() {
-      if (!fdToken.value) { showToast('Token API requis'); return; }
       adminBusy.value=true; apiMsg.value=null;
       const stageMap = {
         'LAST_32':'Seizièmes','LAST_16':'Huitièmes',
@@ -1528,9 +1518,7 @@ service cloud.firestore {
         'THIRD_PLACE':'3ème Place','FINAL':'Finale',
       };
       try {
-        const resp = await fetch('https://api.football-data.org/v4/competitions/WC/matches?season=2026', {
-          headers: { 'X-Auth-Token': fdToken.value }
-        });
+        const resp = await fetch('/.netlify/functions/fetchResults');
         if (!resp.ok) throw new Error(`API ${resp.status}`);
         const data = await resp.json();
         const knockouts = (data.matches||[]).filter(m=>stageMap[m.stage] && m.homeTeam?.name && m.awayTeam?.name && m.homeTeam.name!=='');
@@ -1607,7 +1595,7 @@ service cloud.firestore {
       selPhase, selGroup, expandedId, drafts,
       selStandGroup,
       detailMatch, detailPreds, loadingDetail,
-      saving, adminBusy, adminTab, fdToken, apiMsg, toast,
+      saving, adminBusy, adminTab, apiMsg, toast,
       resultEntry, newM, showRules,
       // Computed
       navTabs, adminTabs, pageTitle, myTotalPts,
